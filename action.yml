@@ -1,0 +1,54 @@
+name: 'Execute Stack deploy'
+description: 'Deploy a Stack project'
+inputs:
+  git-repo:
+    description: The git repo to clone
+    required: true
+  git-ref:
+    description: Commit ref to check out (typically a hash)
+    required: true
+  docker-image:
+    description: Full path to Docker image to deploy
+    required: true
+  project:
+    description: 'Project name as specified in the deploy.yml configuration'
+    required: true
+  release-id:
+    description: 'Name of the release (typically a date and commit hash)'
+    required: false
+runs:
+  using: "composite"
+  steps:
+    - name: Set release ID
+      id: set-release
+      shell: bash
+      run: |
+        if [ -z "${{ inputs.release-id }}" ]; then
+          release="$(date -u +"%Y-%m-%dT%H-%M-%S-%3NZ")-${{ inputs.git-ref }}"
+        else
+          release="${{ inputs.release-id }}"
+        fi
+        echo "release = $release"
+        echo "release=$release" >> "$GITHUB_OUTPUT"
+
+    # Clone just the Stack deploy configuration.
+    # We do this here instead of on the deployer since the GitHub Actions runner already has SSH permissions configured
+    - name: Clone deploy configuration
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.git-repo }}
+        ref: ${{ inputs.git-ref }}
+        clean: false # Reuse previously installed Terraform plugins
+        sparse-checkout: |
+          .stack
+
+    - name: Copy configuration to temp directory that gets reused between deploys
+      shell: bash
+      run: |
+        mkdir -p ~/${{ inputs.project}}-deployer
+        rm -rf ~/${{ inputs.project }}-deployer/.stack
+        cp -R .stack ~/${{ inputs.project }}-deployer/.stack
+
+    - name: Deploy the ${{ inputs.project }} stack
+      shell: bash
+      run: cd ~/${{ inputs.project }}-deployer && env STACK_DOCKER_IMAGE='${{ inputs.docker-image }}' CI=true stack deploy --yes --release=${{ steps.set-release.outputs.release }}
