@@ -16,6 +16,9 @@ inputs:
   release-id:
     description: 'Name of the release (typically a date and commit hash)'
     required: false
+  pods:
+    description: 'Space-separated list of pods to deploy'
+    required: false
 runs:
   using: "composite"
   steps:
@@ -49,6 +52,21 @@ runs:
         rm -rf ~/${{ inputs.project }}-deployer/.stack
         cp -R .stack ~/${{ inputs.project }}-deployer/.stack
 
+    - name: Process pods input
+      id: process-pods
+      shell: bash
+      run: |
+        pods_input="${{ inputs.pods }}"
+        if [ -n "$pods_input" ]; then
+          processed_pods=""
+          for pod in $pods_input; do
+            processed_pods="$processed_pods pod:$pod"
+          done
+          echo "pods=$processed_pods" >> "$GITHUB_OUTPUT"
+        else
+          echo "pods=" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Deploy the ${{ inputs.project }} stack
       shell: bash
-      run: cd ~/${{ inputs.project }}-deployer && env STACK_DOCKER_IMAGE='${{ inputs.docker-image }}' CI=true stack deploy --yes --release=${{ steps.set-release.outputs.release }}
+      run: cd ~/${{ inputs.project }}-deployer && env STACK_DOCKER_IMAGE='${{ inputs.docker-image }}' CI=true stack deploy --yes --release=${{ steps.set-release.outputs.release }} ${{ steps.process-pods.outputs.pods }}

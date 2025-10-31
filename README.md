@@ -50,6 +50,7 @@ jobs:
           git-ref: ${{ github.sha }}
           docker-image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-organization/my-repository:${{ github.sha }} # ECR repo
           project: 'my-project'
+          pods: 'pod-a pod-b pod-c' # Optional
 ```
 
 There's no need to clone the repo before invoking this action as it will handle the cloning itself.
