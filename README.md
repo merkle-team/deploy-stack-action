@@ -2,7 +2,7 @@
 
 Executes a `stack` deploy via self-hosted GitHub Actions runner.
 
-Allows us to reuse this logic across all applications we deploy via [Stack](https://github.com/warpcast/stack).
+Allows us to reuse this logic across all applications we deploy via [Stack](https://github.com/merkle-team/stack).
 
 ## Inputs
 - `git-repo` **(required)** GitHub repository to clone (e.g. `my-org/my-repo-name`)
@@ -27,11 +27,11 @@ tar xzf ./actions-runner-linux-arm64-${RUNNER_VERSION}.tar.gz
 ```
 
 Go to your repository's Runners settings and get a temporary token.
-For example: `https://github.com/warpcast/my-project/settings/actions/runners/new?arch=arm64&os=linux`
+For example: `https://github.com/merkle-team/my-project/settings/actions/runners/new?arch=arm64&os=linux`
 
 Configure and install the runner as a service:
 ```
-./config.sh --url https://github.com/warpcast/${REPO} --token ${TOKEN} --name ${PROJECT}-deployer --work ${PROJECT}-deployer --labels ${PROJECT}-deployer --unattended
+./config.sh --url https://github.com/merkle-team/${REPO} --token ${TOKEN} --name ${PROJECT}-deployer --work ${PROJECT}-deployer --labels ${PROJECT}-deployer --unattended
 
 sudo ./svc.sh install
 sudo ./svc.sh start
@@ -44,7 +44,7 @@ jobs:
   my-job:
     runs-on: my-project-deployer # Must match a GitHub Actions self-hosted runner that was previously registered with this label
     steps:
-      - uses: warpcast/deploy-action
+      - uses: merkle-team/deploy-action
         with:
           git-repo: ${{ github.repository }}
           git-ref: ${{ github.sha }}
