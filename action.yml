@@ -35,15 +35,25 @@ runs:
       env:
         STACK_VERSION: ${{ inputs.stack-version }}
       run: |
-        # Re-install whenever a specific version is pinned, so persistent
-        # runners with a stale binary still end up on the requested version.
-        # When unpinned, only install if not already present (no-op on
-        # ephemeral runners that lack the binary, fast on persistent runners
-        # that already have it).
-        if [ -n "$STACK_VERSION" ] || ! which stack >/dev/null; then
-          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/merkle-team/stack/refs/heads/main/install.sh)"
+        if [ -n "$STACK_VERSION" ]; then
+          # Pinned: download the requested binary to a user-writable location
+          # so we don't need sudo (some runner images don't allow passwordless
+          # sudo) and so we override any pre-installed /usr/local/bin/stack.
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL \
+            "https://github.com/merkle-team/stack/releases/download/${STACK_VERSION}/stack" \
+            -o "$HOME/.local/bin/stack"
+          chmod +x "$HOME/.local/bin/stack"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/stack" --version
+        else
+          # Unpinned: install latest stable via the upstream installer if
+          # not already present.
+          if ! which stack >/dev/null; then
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/merkle-team/stack/refs/heads/main/install.sh)"
+          fi
+          stack --version
         fi
-        stack --version
 
     - name: Set release ID
       id: set-release
