@@ -22,16 +22,28 @@ inputs:
   excluded-pods:
     description: 'Space-separated list of pods to exclude (mutually exclusive with `pods`)'
     required: false
+  stack-version:
+    description: 'Pin a specific Stack release tag (e.g. v1.2.3 or v1.2.3-pre1). Defaults to latest stable.'
+    required: false
+    default: ''
 runs:
   using: "composite"
   steps:
-    - name: Install stack if not present
+    - name: Install stack
       id: install
       shell: bash
+      env:
+        STACK_VERSION: ${{ inputs.stack-version }}
       run: |
-        if ! which stack; then
+        # Re-install whenever a specific version is pinned, so persistent
+        # runners with a stale binary still end up on the requested version.
+        # When unpinned, only install if not already present (no-op on
+        # ephemeral runners that lack the binary, fast on persistent runners
+        # that already have it).
+        if [ -n "$STACK_VERSION" ] || ! which stack >/dev/null; then
           /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/merkle-team/stack/refs/heads/main/install.sh)"
         fi
+        stack --version
 
     - name: Set release ID
       id: set-release
