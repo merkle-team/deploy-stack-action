@@ -70,7 +70,7 @@ runs:
     # Clone just the Stack deploy configuration.
     # We do this here instead of on the deployer since the GitHub Actions runner already has SSH permissions configured
     - name: Clone deploy configuration
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         repository: ${{ inputs.git-repo }}
         ref: ${{ inputs.git-ref }}
