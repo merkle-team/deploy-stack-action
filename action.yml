@@ -63,7 +63,8 @@ runs:
         GIT_REF: ${{ inputs.git-ref }}
       run: |
         if [ -z "$RELEASE_ID" ]; then
-          release="$(date -u +"%Y-%m-%dT%H-%M-%S-%3NZ")-${GIT_REF}"
+          # Branch/tag refs can contain '/' and other characters; make them name-safe.
+          release="$(date -u +"%Y-%m-%dT%H-%M-%S-%3NZ")-${GIT_REF//[^A-Za-z0-9._-]/-}"
         else
           release="$RELEASE_ID"
         fi
