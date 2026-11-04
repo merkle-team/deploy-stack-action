@@ -58,11 +58,18 @@ runs:
     - name: Set release ID
       id: set-release
       shell: bash
+      env:
+        RELEASE_ID: ${{ inputs.release-id }}
+        GIT_REF: ${{ inputs.git-ref }}
       run: |
-        if [ -z "${{ inputs.release-id }}" ]; then
-          release="$(date -u +"%Y-%m-%dT%H-%M-%S-%3NZ")-${{ inputs.git-ref }}"
+        if [ -z "$RELEASE_ID" ]; then
+          release="$(date -u +"%Y-%m-%dT%H-%M-%S-%3NZ")-${GIT_REF}"
         else
-          release="${{ inputs.release-id }}"
+          release="$RELEASE_ID"
+        fi
+        if [[ ! "$release" =~ ^[A-Za-z0-9._-]+$ ]]; then
+          echo "::error::Invalid release ID: only letters, digits, '.', '_' and '-' are allowed"
+          exit 1
         fi
         echo "release = $release"
         echo "release=$release" >> "$GITHUB_OUTPUT"
@@ -80,37 +87,56 @@ runs:
 
     - name: Copy configuration to temp directory that gets reused between deploys
       shell: bash
+      env:
+        PROJECT: ${{ inputs.project }}
       run: |
-        mkdir -p ~/${{ inputs.project}}-deployer
-        rm -rf ~/${{ inputs.project }}-deployer/.stack
-        cp -R .stack ~/${{ inputs.project }}-deployer/.stack
-
-    - name: Process pods input
-      id: process-pods
-      shell: bash
-      run: |
-        pods_input="${{ inputs.pods }}"
-        if [ -n "$pods_input" ]; then
-          processed_pods=""
-          for pod in $pods_input; do
-            processed_pods="$processed_pods pod:$pod"
-          done
-          echo "pods=$processed_pods" >> "$GITHUB_OUTPUT"
-        else
-          echo "pods=" >> "$GITHUB_OUTPUT"
+        if [[ ! "$PROJECT" =~ ^[A-Za-z0-9._-]+$ ]]; then
+          echo "::error::Invalid project name"
+          exit 1
         fi
-
-        excluded_pods_input="${{ inputs.excluded-pods }}"
-        if [ -n "$excluded_pods_input" ]; then
-          processed_excluded_pods=""
-          for pod in $excluded_pods_input; do
-            processed_excluded_pods="$processed_excluded_pods pod:-$pod"
-          done
-          echo "excluded_pods=$processed_excluded_pods" >> "$GITHUB_OUTPUT"
-        else
-          echo "excluded_pods=" >> "$GITHUB_OUTPUT"
-        fi
+        mkdir -p "$HOME/${PROJECT}-deployer"
+        rm -rf "$HOME/${PROJECT}-deployer/.stack"
+        cp -R .stack "$HOME/${PROJECT}-deployer/.stack"
 
     - name: Deploy the ${{ inputs.project }} stack
       shell: bash
-      run: cd ~/${{ inputs.project }}-deployer && env STACK_DOCKER_IMAGE='${{ inputs.docker-image }}' CI=true stack deploy --yes --release=${{ steps.set-release.outputs.release }} ${{ steps.process-pods.outputs.pods }} ${{ steps.process-pods.outputs.excluded_pods }}
+      # Inputs reach the script only through env vars, never through ${{ }} in
+      # the script text, so a crafted pod name can't inject shell commands.
+      env:
+        PROJECT: ${{ inputs.project }}
+        RELEASE: ${{ steps.set-release.outputs.release }}
+        DOCKER_IMAGE: ${{ inputs.docker-image }}
+        PODS: ${{ inputs.pods }}
+        EXCLUDED_PODS: ${{ inputs.excluded-pods }}
+      run: |
+        set -euo pipefail
+        set -f # no glob expansion when splitting pod lists
+
+        name_re='^[A-Za-z0-9._-]+$'
+        if [[ ! "$PROJECT" =~ $name_re ]]; then
+          echo "::error::Invalid project name"
+          exit 1
+        fi
+        if [[ ! "$DOCKER_IMAGE" =~ ^[A-Za-z0-9._:/@-]+$ ]]; then
+          echo "::error::Invalid docker image"
+          exit 1
+        fi
+
+        args=(deploy --yes "--release=$RELEASE")
+        for pod in $PODS; do
+          if [[ ! "$pod" =~ $name_re ]]; then
+            echo "::error::Invalid pod name in pods input"
+            exit 1
+          fi
+          args+=("pod:$pod")
+        done
+        for pod in $EXCLUDED_PODS; do
+          if [[ ! "$pod" =~ $name_re ]]; then
+            echo "::error::Invalid pod name in excluded-pods input"
+            exit 1
+          fi
+          args+=("pod:-$pod")
+        done
+
+        cd "$HOME/${PROJECT}-deployer"
+        STACK_DOCKER_IMAGE="$DOCKER_IMAGE" CI=true stack "${args[@]}"
